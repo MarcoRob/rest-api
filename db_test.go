@@ -2,7 +2,6 @@ package user_report
 
 import (
 	"testing"
-	"log"
 )
 
 const (
@@ -13,21 +12,23 @@ const (
 func testDB(t *testing.T, db UserReportDatabase) {
 	defer db.Close()
 
-	habitsArray, err := FetchUserHabits()
+	delayedTasks, err := ExtractTaskType(DELAYED_TASKS)
 	if err != nil {
-		log.Panic(err)
+		t.Errorf("test failed with err: %v", err)
+	}
+	todayTasks, err := ExtractTaskType(TODAY_TASKS)
+	if err != nil {
+		t.Errorf("test failed with err: %v", err)
 	}
 
-	tasksArray, err := FetchUserTasks()
+	goodHabits, err := ExtractHabitType("good")
 	if err != nil {
-		log.Panic(err)
+		t.Errorf("test failed with err: %v", err)
 	}
-
-	delayedTasks := extractTaskType(tasksArray, DELAYED_TASKS)
-	todayTasks := extractTaskType(tasksArray, TODAY_TASKS)
-
-	goodHabits := extractHabitType(habitsArray, "good")
-	badHabits := extractHabitType(habitsArray, "bad")
+	badHabits, err := ExtractHabitType("bad")
+	if err != nil {
+		t.Errorf("test failed with err: %v", err)
+	}
 
 	report := &UserReport{
 		UserID: 201,
@@ -39,13 +40,13 @@ func testDB(t *testing.T, db UserReportDatabase) {
 
 	reportId, err := db.AddUserReport(report)
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("test failed with err: %v", err)
 	}
 
 	report.ReportID = reportId
 	gotReport, err := db.GetUserReport(reportId)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("test failed with err: %v", err)
 	}
 	if got, want := gotReport.UserID, report.UserID; got != want {
 		t.Errorf("Update id: got %d, want %d", got, want)

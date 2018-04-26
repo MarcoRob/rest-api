@@ -13,10 +13,6 @@ import (
 
 const DECIMAL_BASE = 10
 const INT64_BITS = 64
-const (
-	TODAY_TASKS = 0
-	DELAYED_TASKS = -1
-)
 
 func main() {
 	registerHandlers()
@@ -25,15 +21,17 @@ func main() {
 func registerHandlers() {
 	router := mux.NewRouter()
 
-	router.Methods("GET").Path("/report/user/{userId}").
+	router.Methods("GET").Path("/users/{userId}/reports").
 		Handler(appHandler(createHandler))
-	router.Methods("GET").Path("/report/user/{userId}/{reportId}").
+	router.Methods("GET").Path("/users/reports/{reportId}").
 		Handler(appHandler(getByIDHandler))
 
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
 func getByIDHandler(w http.ResponseWriter, r *http.Request) *appError {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
 	vars := mux.Vars(r)
 	reportId, err := strconv.ParseInt(vars["reportId"], DECIMAL_BASE, INT64_BITS)
 	if err != nil {
@@ -48,21 +46,18 @@ func getByIDHandler(w http.ResponseWriter, r *http.Request) *appError {
 }
 
 func createHandler(w http.ResponseWriter, r *http.Request) *appError {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
 	vars := mux.Vars(r)
-	userId, err := strconv.ParseInt(vars["userId"], DECIMAL_BASE, INT64_BITS)
+	userId := vars["userId"]
+
+	report, err := user_report.GenerateUserReport(userId)
 	if err != nil {
-		return appErrorf(err, "could not parse userId from request: %v", err)
+		return appErrorf(err, "could not generate user report: %v", err)
 	}
 
-	delayedTasks, err := user_report.ExtractTaskType(DELAYED_TASKS)
-	todayTasks, err := user_report.ExtractTaskType(TODAY_TASKS)
-	goodHabits, err := user_report.ExtractHabitType("good")
-	badHabits, err := user_report.ExtractHabitType("bad")
-
-	report := &user_report.UserReport{UserID:userId, TasksToday:todayTasks,
-		TasksDelayed:delayedTasks, HabitsGood:goodHabits, HabitsBad:badHabits}
-	reportId, err := user_report.DB.AddUserReport(report)
-	http.Redirect(w, r, fmt.Sprintf("/report/user/%d/%d", userId, reportId),
+	reportId, err := user_report.DB.AddUserReport(&report)
+	http.Redirect(w, r, fmt.Sprintf("/users/reports/%d", reportId),
 		http.StatusFound)
 	return nil
 }
@@ -76,6 +71,8 @@ type appError struct {
 }
 
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
 	if e := fn(w, r); e != nil {
 		log.Printf("Handler error: status code: %d, message: %s, underlying err: %#v",
 			e.Code, e.Message, e.Error)

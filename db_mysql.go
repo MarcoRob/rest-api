@@ -12,15 +12,15 @@ import (
 const dbDoesNotExistError = 1049
 const tableDoesNotExistError = 1146
 const insertStatement = `
-		INSERT INTO user_reports(_id, tasks_today, tasks_delayed, habits_good, 
-			habits_bad)
+		INSERT INTO user_reports(user_id, today_tasks, delayed_tasks, 
+			good_habits, bad_habits)
 		VALUES (?, ?, ?, ?, ?);
 	`
 const getStatement = `
 		SELECT report_id
 		FROM user_reports
-		WHERE _id = ? AND tasks_today = ? AND tasks_delayed = ? AND habits_good = ?
-			AND habits_bad = ?;
+		WHERE user_id = ? AND today_tasks = ? AND delayed_tasks = ? 
+			AND good_habits = ? AND bad_habits = ?;
 	`
 const getByIDStatement = `
 		SELECT *
@@ -32,11 +32,11 @@ var createTableStatements = []string{
 	`USE arqui;`,
 	`CREATE TABLE IF NOT EXISTS user_reports (
 		report_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-		_id INT UNSIGNED NOT NULL,
-		tasks_today TEXT,
-		tasks_delayed TEXT,
-		habits_good TEXT,
-		habits_bad TEXT
+		user_id VARCHAR(255) NOT NULL,
+		today_tasks TEXT,
+		delayed_tasks TEXT,
+		good_habits TEXT,
+		bad_habits TEXT
 	);`,
 }
 
@@ -111,7 +111,7 @@ type rowScanner interface {
 func scanUserReport(s rowScanner) (*UserReport, error) {
 	var (
 		reportId		int64
-		userId			int64
+		userId			string
 		tasksToday		sql.NullString
 		tasksDelayed 	sql.NullString
 		habitsGood		sql.NullString
@@ -133,10 +133,10 @@ func scanUserReport(s rowScanner) (*UserReport, error) {
 	report := &UserReport{
 		UserID:userId,
 		ReportID:reportId,
-		TasksToday:tasksTodaySlice,
-		TasksDelayed:tasksDelayedSlice,
-		HabitsGood:habitsGoodSlice,
-		HabitsBad:habitsBadSlice,
+		TodayTasks:tasksTodaySlice,
+		DelayedTasks:tasksDelayedSlice,
+		GoodHabits:habitsGoodSlice,
+		BadHabits:habitsBadSlice,
 	}
 	return report, nil
 }
@@ -197,7 +197,7 @@ func execAffectingOneRow(stmt *sql.Stmt, args ...interface{}) (sql.Result, error
 func (db *mysqlDB) GetUserReport(reportId int64) (*UserReport, error) {
 	report, err := scanUserReport(db.getById.QueryRow(reportId))
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("msql: could not find book with id %d", reportId)
+		return nil, fmt.Errorf("msql: could not find report with id %d", reportId)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("mysql: could not get user report: %v", err)
@@ -209,14 +209,14 @@ func (db *mysqlDB) AddUserReport(report *UserReport) (reportId int64, err error)
 	if exists, reportId, err := db.checkExistingReport(report); err != nil {
 		return -1, err
 	} else if exists {
-		log.Println("Report exists\n")
+		log.Println("Report exists")
 		return reportId, nil
 	}
 
-	todayTasksJSON, err := json.Marshal(report.TasksToday)
-	delayedTasksJSON, err := json.Marshal(report.TasksDelayed)
-	goodHabitsJSON, err := json.Marshal(report.HabitsGood)
-	badHabitsJSON, err := json.Marshal(report.HabitsBad)
+	todayTasksJSON, err := json.Marshal(report.TodayTasks)
+	delayedTasksJSON, err := json.Marshal(report.DelayedTasks)
+	goodHabitsJSON, err := json.Marshal(report.GoodHabits)
+	badHabitsJSON, err := json.Marshal(report.BadHabits)
 
 	result, err := execAffectingOneRow(db.insert, report.UserID, todayTasksJSON,
 		delayedTasksJSON, goodHabitsJSON, badHabitsJSON)
@@ -228,15 +228,16 @@ func (db *mysqlDB) AddUserReport(report *UserReport) (reportId int64, err error)
 	if err != nil {
 		return 0, fmt.Errorf("mysql: could not get last insert ID: %v", err)
 	}
+
 	return lastInsertID, nil
 }
 
 func (db *mysqlDB) checkExistingReport(report *UserReport) (exists bool,
 		reportId int64, err error) {
-	todayTasksJSON, err := json.Marshal(report.TasksToday)
-	delayedTasksJSON, err := json.Marshal(report.TasksDelayed)
-	goodHabitsJSON, err := json.Marshal(report.HabitsGood)
-	badHabitsJSON, err := json.Marshal(report.HabitsBad)
+	todayTasksJSON, err := json.Marshal(report.TodayTasks)
+	delayedTasksJSON, err := json.Marshal(report.DelayedTasks)
+	goodHabitsJSON, err := json.Marshal(report.GoodHabits)
+	badHabitsJSON, err := json.Marshal(report.BadHabits)
 
 	err = db.get.QueryRow(report.UserID, todayTasksJSON,
 		delayedTasksJSON, goodHabitsJSON, badHabitsJSON).Scan(&reportId)

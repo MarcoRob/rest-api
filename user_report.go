@@ -7,37 +7,39 @@ import (
 	"time"
 )
 
-const HABITS_URL = "https://api.myjson.com/bins/12n767"
-const TASKS_URL = "https://api.myjson.com/bins/bweof"
+const (
+	HABITS_URL = "https://habits-microservice-marcorob.c9users.io"
+	TASKS_URL = "http://10.43.88.167:8080"
+	TODAY_TASKS = 0
+	DELAYED_TASKS = -1
+)
 
 type Habit struct {
-	ID			int64	`json:"_id"`
-	Type 		string 	`json:"type"`
 	Difficulty 	string 	`json:"difficulty"`
 	Color		string	`json:"color"`
-	Title		string	`json:"title"`
 	Score 		int 	`json:"score"`
+	HabitID		string	`json:"_id"`
+	UserID		string	`json:"userID"`
+	Type 		string 	`json:"type"`
+	Title		string	`json:"title"`
 }
 
 type Task struct {
-	Title 		string 		`json:"title"`
-	Description string 		`json:"description"`
-	DueDate 	int64 		`json:"due_date"`
-	Reminder 	Reminder 	`json:"reminder"`
-}
-
-type Reminder struct {
-	Time string `json:"time"`
-	Days int	`json:"days"`
+	CompletedDate 	*int64		`json:"completedDate"`
+	Description 	string 		`json:"description"`
+	DueDate 		int64 		`json:"dueDate"`
+	Reminder 		int64		`json:"remind"`
+	Title 			string 		`json:"title"`
+	UserID			string		`json:"userId"`
 }
 
 type UserReport struct {
-	ReportID		int64	`json:"report_id"`
-	UserID			int64	`json:"_id"`
-	TasksToday 		[]Task 	`json:"tasks_today"`
-	TasksDelayed 	[]Task 	`json:"tasks_delayed"`
-	HabitsGood 		[]Habit `json:"habits_good"`
-	HabitsBad 		[]Habit `json:"habits_bad"`
+	ReportID		int64	`json:"reportID"`
+	UserID			string	`json:"userID"`
+	TodayTasks 		[]Task 	`json:"todayTasks"`
+	DelayedTasks 	[]Task 	`json:"delayedTasks"`
+	GoodHabits		[]Habit `json:"goodHabits"`
+	BadHabits		[]Habit `json:"badHabits"`
 }
 
 type UserReportDatabase interface {
@@ -48,9 +50,9 @@ type UserReportDatabase interface {
 	Close()
 }
 
-func FetchUserHabits() ([]Habit, error) {
-	resp, err := http.Get(HABITS_URL)
-	//resp, err := http.Get(HABITS_URL + "/habits/" + userId)
+func fetchUserHabits(userId string) ([]Habit, error) {
+	//resp, err := http.Get(HABITS_URL)
+	resp, err := http.Get(HABITS_URL + "/users/" + userId + "/habits")
 	if err != nil {
 		return []Habit{}, errors.New("Habits unavailable")
 	}
@@ -65,9 +67,9 @@ func FetchUserHabits() ([]Habit, error) {
 	return jsonArray, nil
 }
 
-func FetchUserTasks() ([]Task, error) {
-	resp, err := http.Get(TASKS_URL)
-	//resp, err := http.Get(TASKS_URL + "/tasks/" + userId)
+func fetchUserTasks(userId string) ([]Task, error) {
+	//resp, err := http.Get(TASKS_URL)
+	resp, err := http.Get(TASKS_URL + "/Task/users/" + userId + "/tasks")
 	if err != nil {
 		return []Task{}, errors.New("Tasks unavailable")
 	}
@@ -82,8 +84,8 @@ func FetchUserTasks() ([]Task, error) {
 	return jsonArray, nil
 }
 
-func ExtractHabitType(habitType string) ([]Habit, error) {
-	allUserHabits, err := FetchUserHabits()
+func extractHabitType(userId string, habitType string) ([]Habit, error) {
+	allUserHabits, err := fetchUserHabits(userId)
 	if err != nil {
 		return []Habit{}, err
 	}
@@ -97,8 +99,8 @@ func ExtractHabitType(habitType string) ([]Habit, error) {
 	return returnHabits, nil
 }
 
-func ExtractTaskType(taskType int) ([]Task, error) {
-	allUserTasks, err := FetchUserTasks()
+func extractTaskType(userId string, taskType int) ([]Task, error) {
+	allUserTasks, err := fetchUserTasks(userId)
 	if err != nil {
 		return []Task{}, err
 	}
@@ -111,6 +113,30 @@ func ExtractTaskType(taskType int) ([]Task, error) {
 		}
 	}
 	return returnTasks, nil
+}
+
+func GenerateUserReport(userId string) (UserReport, error) {
+	var err error
+	report := UserReport{UserID:userId}
+
+	report.DelayedTasks, err = extractTaskType(userId, DELAYED_TASKS)
+	if err != nil {
+		return UserReport{}, err
+	}
+	report.TodayTasks, err = extractTaskType(userId, TODAY_TASKS)
+	if err != nil {
+		return UserReport{}, err
+	}
+	report.GoodHabits, err = extractHabitType(userId, "good")
+	if err != nil {
+		return UserReport{}, err
+	}
+	report.BadHabits, err = extractHabitType(userId,"bad")
+	if err != nil {
+		return UserReport{}, err
+	}
+
+	return report, nil
 }
 
 // returns 0 if times on same day
